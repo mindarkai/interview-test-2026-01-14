@@ -1,3 +1,13 @@
+## Task
+- Main purpose of app should be a Todo list and you should be able to use the ConvoView to ask questions about the todo list
+- Use the kv_store table to save and load data
+- List and detail view to demonstrate routing
+- Detail page should use the following:
+  - ConvoView
+- All styling to use Tailwinds
+
+
+## NextJS stuff
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
 
 ## Getting Started

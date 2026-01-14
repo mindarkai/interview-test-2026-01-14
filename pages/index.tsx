@@ -1,7 +1,9 @@
 import { ConvoView } from "@/components/ConvoView";
 import { supClient } from "@/lib/supabase";
+import { convo } from "@convo-lang/convo-lang";
 import { Mail, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import z from "zod";
 
 export default function IndexPage()
 {
@@ -18,6 +20,27 @@ export default function IndexPage()
         supClient().from('kv_store').insert({
             
         })
+    },[]);
+
+    const [userInput,setUserInput]=useState('');
+    const formatUsingConvo=useCallback(async (data:any)=>{
+        const schema=z.object({
+            name:z.string(),
+            describe:z.string(),
+        })
+        const result=await convo`
+            > system
+            Help the user convert the following data
+
+            @json ${schema}
+            > user
+            Convert the following user input:
+
+            <input>
+            ${data}
+            </input>
+        `
+        console.log('hio 👋 👋 👋 Formatted data',result);
     },[]);
 
     return (
@@ -56,6 +79,12 @@ export default function IndexPage()
 
             <section>
                 <pre><code className="whitespace-pre-wrap">{JSON.stringify(value,null,4)}</code></pre>
+            </section>
+
+            <section className="p-8 flex flex-col gap-4">
+                <h1>Data formatting</h1>
+                <input className="input" type="text" value={userInput} onChange={e=>setUserInput(e.target.value)} />
+                <button className="btn" onClick={()=>formatUsingConvo(userInput)}>Format data</button>
             </section>
 
             <section>
