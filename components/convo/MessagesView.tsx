@@ -1,0 +1,593 @@
+import { ConversationUiCtrl, ConvoComponent, ConvoComponentRendererContext, ConvoMarkdownEnableState, ConvoMessageRenderResult, ConvoRagRenderer, FlatConvoConversation, FlatConvoMessage, convoRoles, convoTags, defaultConvoRenderTarget, isMdConvoEnabledFor, shouldDisableConvoAutoScroll } from "@convo-lang/convo-lang";
+import { useConversationTheme, useConversationUiCtrl } from "@convo-lang/convo-lang-react";
+import { atDotCss } from "@iyio/at-dot-css";
+import { aryRemoveWhere, cn, containsMarkdownImage, objectToMarkdown, parseMarkdownImages } from "@iyio/common";
+import { Image, ScrollView, SlimButton, useSubject } from "@iyio/react-common";
+import { Fragment } from "react";
+import { ConversationStatusIndicator } from "./ConversationStatusIndicator";
+import { MarkdownViewer } from "./MarkdownViewer";
+import { MessageComponentRenderer } from "./MessageComponentRenderer";
+
+export type ConvoMessageIconRenderer=(msg:FlatConvoMessage)=>string|any;
+
+interface RenderOptions
+{
+    ctrl:ConversationUiCtrl;
+    flat:FlatConvoConversation|null;
+    showSystemMessages?:boolean;
+    showFunctions?:boolean;
+    hideSuggestions?:boolean;
+    showResults?:boolean;
+    rowClassName?:string;
+    ragRenderer?:ConvoRagRenderer;
+    assistantIcon?:string;
+    userIcon?:string;
+    assistantIconRender?:ConvoMessageIconRenderer;
+    userIconRender?:ConvoMessageIconRenderer;
+    iconSize?:string;
+    iconClassName?:string;
+    callRenderer?:(msg:FlatConvoMessage,flat:FlatConvoConversation,ctrl:ConversationUiCtrl)=>any;
+    enableMarkdown?:ConvoMarkdownEnableState;
+    markdownClassName?:string;
+    messageClassName?:string;
+    userClassName?:string;
+    assistantClassName?:string;
+}
+
+const renderResult=(
+    i:number,
+    result:ConvoMessageRenderResult,
+    options:RenderOptions,
+):any=>{
+    const {ctrl,flat}=options;
+    if((typeof result !== 'object') || !result){
+        return null;
+    }
+    if(result.component){
+        return <Fragment key={i+'comp'}>{result.component}</Fragment>
+    }
+    return renderMessage(i,{
+        role:result.role??'assistant',
+        content:result.content
+    },options)
+}
+
+const renderMessage=(
+    i:number,
+    m:FlatConvoMessage,
+    {
+        ctrl,
+        flat,
+        showSystemMessages,
+        showResults,
+        showFunctions,
+        hideSuggestions,
+        rowClassName,
+        ragRenderer,
+        assistantIcon,
+        userIcon,
+        assistantIconRender,
+        userIconRender,
+        iconSize,
+        iconClassName,
+        callRenderer,
+        enableMarkdown,
+        markdownClassName,
+        messageClassName,
+        userClassName,
+        assistantClassName
+    }:RenderOptions
+)=>{
+
+    if(!flat){
+        return null;
+    }
+
+    const className=style.msg({user:m.role==='user',agent:m.role!=='user',suggestion:m.isSuggestion});
+    const roleClass=cn(messageClassName,m.role==='assistant' && assistantClassName,m.role==='user' && userClassName);
+
+    if(m.component!==undefined){
+        return (
+            <MessageComponentRenderer
+                key={i+'comp'}
+                message={m}
+                ctx={{
+                    id:i+'comp',
+                    ctrl,
+                    convo:flat.conversation,
+                    flat,
+                    index:i,
+                    message:m,
+                    isUser:m.role==='user',
+                    className,
+                    rowClassName,
+
+                }}
+            />
+        )
+    }
+
+
+    if(m.role==='result'){
+        if(!m.setVars || (!showResults && !showFunctions)){
+            return null;
+        }
+        const keys=Object.keys(m.setVars);
+        aryRemoveWhere(keys,k=>k.startsWith('__'));
+        if(!keys.length){
+            return null;
+        }
+        let firstValue=m.setVars[keys[0]??''];
+        if(keys.length===1 && Array.isArray(firstValue) && firstValue.length===1){
+            firstValue=firstValue[0];
+        }
+        const singleItem=keys.length===1 && firstValue && (typeof firstValue==='object');
+        return (
+            <div className={rowClassName} key={i}>
+                <div className={cn(className,style.data())}>
+                    <div className={style.table({singleItem})}>
+                        {keys.map((k,ki)=>{
+
+                            const value=ki===0?firstValue:(m.setVars?.[k]);
+
+                            return (
+                                <Fragment key={k+'r'}>
+                                    <div>{k}</div>
+                                    {!singleItem && <div>-</div>}
+                                    <div>{k[0]===k[0]?.toLowerCase()?
+                                        objectToMarkdown(value)
+                                    :
+                                        JSON.stringify(value,null,4)
+                                    }</div>
+                                </Fragment>
+                            )
+                        })}
+                    </div>
+                </div>
+            </div>
+        )
+    }else if(m.role===convoRoles.rag){
+        return (
+            <div className={rowClassName} key={i+'rag'}>
+                {ragRenderer?.(m,ctrl)??
+                    <div className={cn(className,style.rag())}>
+                        {m.content}
+                    </div>
+                }
+            </div>
+        )
+    }else if(m.fn || (m.role!=='user' && m.role!=='assistant')){
+        if(showSystemMessages && m.role==='system'){
+            return (
+                <div className={rowClassName} key={i+'s'}>
+                    <div className={className}>
+                        {m.content}
+                    </div>
+                </div>
+            )
+        }else if(showFunctions && ( m.fn || m.called)){
+            return (
+                <div className={rowClassName} key={i+'f'}>
+                    <div className={className}>
+                        {JSON.stringify(m,null,4)}
+                    </div>
+                </div>
+            )
+        }else if(m.called){
+            let callRendered=callRenderer?.(m,flat,ctrl);
+            if(callRendered===undefined || callRendered===null){
+                const compName=flat.messages.find(fm=>fm.fn && fm.fn.name===m.called?.name && !fm.called)?.tags?.[convoTags.renderer];
+                const compRenderer=compName?ctrl.componentRenderers[compName]??ctrl.convo?.components[compName]?.renderer:undefined;
+                if(!compRenderer){
+                    return null;
+                }
+                const ctx:ConvoComponentRendererContext={// todo - merge with component renderer above, MAYBE?
+                    id:i+'comp',
+                    ctrl,
+                    convo:flat.conversation,
+                    flat,
+                    index:i,
+                    message:m,
+                    isUser:m.role==='user',
+                    className,
+                    rowClassName,
+                }
+
+                const comp:ConvoComponent={
+                    name:'renderer',
+                    isJson:true,
+                    atts:{message:m,args:m.calledParams,returnValue:m.calledReturn},
+                }
+                callRendered=(typeof compRenderer === 'function')?compRenderer(comp,ctx):compRenderer.render(comp,ctx);
+
+                if(callRendered===undefined || callRendered===null){
+                    return null;
+                }
+            }
+            return (
+                <div className={rowClassName} key={i+'fr'}>
+                    <div className={className}>
+                        {callRendered}
+                    </div>
+                </div>
+            )
+        }
+        return null;
+    }
+
+
+    if(m.content && containsMarkdownImage(m.content)){
+
+        const parts=parseMarkdownImages(m.content);
+
+        // add renderer here
+
+        return (<Fragment key={i+'f'}>{
+            parts.map((p,pi)=>p.image?(
+                <div className={rowClassName} key={pi}>
+                    {ctrl.imageRenderer?.(p.image,style.img({user:m.role==='user',agent:m.role!=='user'}),m)??
+                        <img
+                            className={style.img({user:m.role==='user',agent:m.role!=='user'})}
+                            alt={p.image.description}
+                            src={ctrl.imagePathConverter?ctrl.imagePathConverter(p.image,style.img({user:m.role==='user',agent:m.role!=='user'}),m):p.image.url}
+                        />
+                    }
+                </div>
+            ):(
+                <div className={rowClassName} key={pi}>
+                    <div className={cn(className,roleClass)}>
+                        {(enableMarkdown && isMdConvoEnabledFor(m.isUser?'user':'assistant',enableMarkdown))?
+                            <MarkdownViewer markdown={p.text} contentClassName={markdownClassName}/>:p.text
+                        }
+                    </div>
+                </div>
+            ))
+        }</Fragment>)
+
+    }else if(m.isSuggestion){
+        if(hideSuggestions){
+            return true;
+        }
+        const isFirst=!flat.messages[i-1]?.isSuggestion;
+        if(!isFirst){
+            return null;
+        }
+        const titles:string[]=[];
+        const group:FlatConvoMessage[]=[];
+        for(let x=i;x<flat.messages.length;x++){
+            const segMsg=flat.messages[x];
+            if(!segMsg?.isSuggestion){
+                break;
+            }
+            group.push(segMsg);
+            const t=segMsg.tags?.[convoTags.suggestionTitle];
+            if(t){
+                titles.push(t);
+            }
+        }
+        return (
+            <div className={rowClassName} key={i+'d'}>
+
+                {!!titles.length && <div className={style.suggestTitles()}>
+                    {titles.map((t,i)=>(
+                        <span key={i}>{t}</span>
+                    ))}
+                </div>}
+
+                <div className={cn(className,roleClass)}>
+                    {group.map((msg,gi)=>(
+                        <SlimButton className={style.suggestBtn()} key={gi} onClick={()=>{
+                            ctrl.appendUiMessageAsync(msg.content??'')
+                        }}>
+                            {msg.tags?.[convoTags.suggestion]??msg.content}
+                        </SlimButton>
+                    ))}
+
+                </div>
+            </div>
+        )
+    }else{
+        return (
+            <div className={rowClassName} key={i+'d'}>
+                <div className={style.textMsg()}>
+                    {(m.isAssistant && (!!assistantIcon || assistantIconRender))?getMessageIcon(m,assistantIcon,assistantIconRender,iconSize,iconClassName):null}
+
+                    <div className={style.textMsgContent()}>
+                        <div className={cn(className,roleClass)}>
+                            {(enableMarkdown && isMdConvoEnabledFor(m.isUser?'user':'assistant',enableMarkdown))?
+                                <MarkdownViewer markdown={m.content} contentClassName={markdownClassName}/>:m.content
+                            }
+                        </div>
+                    </div>
+                    {(m.isUser && (!!userIcon || userIconRender))?getMessageIcon(m,userIcon,userIconRender,iconSize,iconClassName):null}
+                </div>
+            </div>
+        )
+    }
+}
+
+const getMessageIcon=(msg:FlatConvoMessage,icon:any,renderer:ConvoMessageIconRenderer|undefined,size:string|undefined,className:string|undefined):any=>{
+    if(renderer){
+        icon=renderer(msg);
+    }
+    if(typeof icon==='string'){
+        icon=<Image alt="icon" src={icon} className={className} style={{
+            width:size,
+            height:size,
+        }} />
+    }
+
+    return icon||null;
+}
+
+export interface MessagesViewProps
+{
+    ctrl?:ConversationUiCtrl;
+    renderTarget?:string;
+    ragRenderer?:ConvoRagRenderer;
+    messageBottomPadding?:string;
+    autoHeight?:boolean;
+    hideSuggestions?:boolean;
+    assistantIcon?:string;
+    userIcon?:string;
+    assistantIconRender?:ConvoMessageIconRenderer;
+    userIconRender?:ConvoMessageIconRenderer;
+    iconSize?:string;
+    iconClassName?:string;
+    callRenderer?:(msg:FlatConvoMessage,flat:FlatConvoConversation,ctrl:ConversationUiCtrl)=>any;
+    enableMarkdown?:ConvoMarkdownEnableState;
+    markdownClassName?:string;
+    messageClassName?:string;
+    userClassName?:string;
+    assistantClassName?:string;
+}
+
+export function MessagesView({
+    renderTarget=defaultConvoRenderTarget,
+    ctrl:_ctrl,
+    ragRenderer,
+    autoHeight,
+    hideSuggestions=false,
+    assistantIcon,
+    userIcon,
+    assistantIconRender,
+    userIconRender,
+    iconClassName,
+    iconSize,
+    callRenderer,
+    enableMarkdown,
+    markdownClassName,
+    messageClassName,
+    userClassName,
+    assistantClassName,
+}:MessagesViewProps){
+
+    const ctrl=useConversationUiCtrl(_ctrl)
+
+    const convo=useSubject(ctrl.convoSubject);
+
+    const flat=useSubject(convo?.flatSubject);
+
+    const messages=flat?.messages??[];
+
+    const theme=useConversationTheme(_ctrl);
+
+    const currentTask=useSubject(ctrl?.currentTaskSubject);
+
+    const showSystemMessages=useSubject(ctrl.showSystemMessagesSubject);
+    const showResults=useSubject(ctrl.showResultsSubject);
+    const showFunctions=useSubject(ctrl.showFunctionsSubject);
+
+    const rowClassName=(theme.messageRowUnstyled?
+        theme.messageRowClassName:
+        style.row({fixedWidth:theme.rowWidth!==undefined},theme.messageRowClassName)
+    );
+
+    const options:RenderOptions={
+        ctrl,flat:flat??null,showSystemMessages,
+        showFunctions,showResults,hideSuggestions,rowClassName,ragRenderer,
+        assistantIcon,userIcon,assistantIconRender,userIconRender,iconClassName,iconSize,
+        callRenderer,enableMarkdown,markdownClassName,
+        messageClassName,userClassName,assistantClassName
+    }
+
+    const mapped=messages.map((m,i)=>{
+
+        const ctrlRendered=ctrl.renderMessage(m,i);
+        if(ctrlRendered===false || !flat || (m.renderTarget??defaultConvoRenderTarget)!==renderTarget){
+            return null;
+        }
+
+        if(ctrlRendered?.position==='replace'){
+            return renderResult(i,ctrlRendered,options);
+        }
+
+        const rendered=renderMessage(i,m,options);
+        if(!rendered){
+            return null;
+        }
+        if(!ctrlRendered){
+            return rendered;
+        }
+
+        return (
+            <Fragment key={i+'j'}>
+                {ctrlRendered.position==='before' && renderResult(i,ctrlRendered,options)}
+                {rendered}
+                {ctrlRendered.position==='after' && renderResult(i,ctrlRendered,options)}
+            </Fragment>
+        )
+
+
+    })
+
+    const body=(
+        <div className={style.list()}>
+
+            {mapped}
+
+            {!!currentTask && <div className={rowClassName}>{
+                (theme.wrapLoader===false?
+                    <ConversationStatusIndicator conversation={convo} uiCtrl={ctrl} />
+                :
+                    <div className={style.msg({agent:true})}>
+                        <ConversationStatusIndicator conversation={convo} uiCtrl={ctrl} />
+                    </div>
+                )
+            }</div>}
+        </div>
+    )
+
+    return (
+        <div className={style.root({autoHeight})} style={style.vars({...theme})}>
+            {autoHeight?
+                body
+            :
+                <ScrollView flex1 autoScrollEnd autoScrollEndFilter={()=>!shouldDisableConvoAutoScroll(messages)}>
+                    {body}
+                </ScrollView>
+            }
+        </div>
+    )
+
+}
+
+const style=atDotCss({name:'MessagesView',order:'framework',namespace:'iyio',css:`
+    @.root{
+        flex:1;
+        display:flex;
+        flex-direction:column;
+        padding-bottom:100px;
+    }
+    @.root.autoHeight{
+        flex:unset;
+    }
+
+    @.list{
+        display:flex;
+        flex-direction:column;
+        gap:0.5rem;
+        padding:0.5rem;
+    }
+    @.msg{
+        padding:0.5rem;
+        border-radius:0.5rem;
+        white-space:pre-wrap;
+        word-break:break-word;
+        max-width:600px;
+    }
+    @.msg.user{
+        margin-left:4rem;
+        align-self:flex-end;
+    }
+    @.msg.agent{
+        margin-right:4rem;
+        align-self:flex-start;
+    }
+
+    @.img{
+        border-radius:18px;
+        max-width:80%;
+    }
+    @.img.user{
+        margin-left:4rem;
+        align-self:flex-end;
+    }
+    @.img.agent{
+        margin-right:4rem;
+        align-self:flex-start;
+    }
+
+    @.data{
+        background-color:#3B3B3D99 !important;
+        font-size:0.8rem;
+        padding:0.5rem;
+    }
+    @.table{
+        display:grid;
+        grid-template-columns:auto auto 1fr;
+    }
+    @.table.singleItem{
+        display:flex;
+        flex-direction:column;
+    }
+    @.table > *{
+        padding:0.5rem 0.25rem;
+        border-bottom:1px solid #ffffff33;
+        align-items:center;
+        display:flex;
+    }
+    @.table > *:nth-last-child(-n+3){
+        border-bottom:none;
+    }
+    @.table.singleItem > *:first-child{
+        font-size:1rem;
+        font-weight:bold;
+        padding-bottom:0;
+    }
+    @.row{
+        display:flex;
+        flex-direction:column;
+        gap:0.5rem;
+    }
+    @.row.fixedWidth{
+        width:@@rowWidth;
+        max-width:100%;
+        align-self:center;
+    }
+    @.rag{
+        background-color:#3B3B3D99 !important;
+    }
+    @.msg.suggestion{
+        padding:0;
+        display:flex;
+        flex-direction:column;
+    }
+    @.msg.agent.suggestion{
+    }
+    @.msg.user.suggestion{
+    }
+    @.suggestIcon{
+        fill:white;
+    }
+    @.suggestBtn{
+        border-top:1px solid white;
+        padding:0.5rem;
+        transition:background-color 0.2s ease-in-out;
+        text-align:center;
+        justify-content:center;
+    }
+    @.suggestBtn:hover{
+        background-color:color-mix( in srgb, white , transparent 50% );
+    }
+    @.suggestBtn:first-child{
+        border-top:none;
+        border-top-right-radius:calc( 0.5rem / 2 );
+        border-top-left-radius:calc( 0.5rem / 2 );
+    }
+    @.suggestBtn:last-child{
+        border-bottom-right-radius:calc( 0.5rem / 2 );
+        border-bottom-left-radius:calc( 0.5rem / 2 );
+    }
+    @.suggestTitles{
+        display:flex;
+        flex-direction:column;
+        margin-top:0.5rem;
+        margin-bottom:-0.5rem;
+        margin:0.5rem 0.5rem -0.5rem 0.5rem;
+        opacity:0.5;
+        font-size:0.9em;
+    }
+
+    /*------*/
+
+    @.textMsg{
+        display:flex;
+        gap:0.5rem;
+    }
+    @.textMsgContent{
+        display:flex;
+        flex-direction:column;
+        flex:1;
+    }
+`});

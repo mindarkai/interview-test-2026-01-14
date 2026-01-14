@@ -1,26 +1,370 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=Manrope:wght@400..800&display=swap");
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Theme tokens (Tailwind v4) */
+@theme {
+    /* Fonts */
+    --font-sans: "Manrope", "Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+    /* Brand color scale (#752E4F) */
+    --color-brand: #752E4F;
+    --color-brand-50:  #F6EEF2;
+    --color-brand-100: #EEDBE5;
+    --color-brand-200: #DEB8CB;
+    --color-brand-300: #CD95B1;
+    --color-brand-400: #B86F94;
+    --color-brand-500: #752E4F;
+    --color-brand-600: #5F243E;
+    --color-brand-700: #4A1C31;
+    --color-brand-800: #351423;
+    --color-brand-900: #210C16;
+
+    /* Extended neutrals tuned for dark UI */
+    --color-surface-900: #0A0A0B;
+    --color-surface-800: #0F0F12;
+    --color-surface-700: #141418;
+    --color-surface-600: #181920;
+    --color-surface-500: #1E212A;
+
+    /* Shadows */
+    --shadow-glass: 0 1px 0 rgba(255,255,255,0.04), 0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
+    --shadow-raised: 0 10px 25px rgba(0,0,0,0.35), 0 2px 10px rgba(0,0,0,0.25);
+
+    /* Radii (sharp/minimal) */
+    --radius-xs: 6px;
+    --radius-sm: 8px;
+    --radius-md: 10px;
+
+    /* Opacities for glass */
+    --glass-bg: rgba(18, 18, 22, 0.55);
+    --glass-hover: rgba(24, 24, 28, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.06);
+
+    /* Semantic text/border */
+    --text-primary: #E6E7EB;
+    --text-secondary: #B9BCC7;
+    --text-muted: #8A8F9D;
+    --border-weak: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.12);
+    --border-brand: color-mix(in oklab, var(--color-brand-500) 45%, white);
+
+    /* Gradients */
+    --gradient-hero-from: #0B0B0F;
+    --gradient-hero-vignette: #0A0A0B;
+    --gradient-hero-to: #12121A;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Base */
+html {
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    @apply text-slate-200;
+    background:
+        radial-gradient(1200px 600px at 80% -10%, color-mix(in oklab, var(--color-brand-500) 15%, transparent) 0%, transparent 60%),
+        radial-gradient(900px 500px at -10% 20%, rgba(87, 31, 56, 0.35) 0%, transparent 60%),
+        linear-gradient(180deg, var(--gradient-hero-from) 0%, var(--gradient-hero-to) 100%);
+    font-family: var(--font-sans);
+    background-attachment: fixed;
+}
+
+/* Selection */
+::selection {
+    background: color-mix(in oklab, var(--color-brand-500) 60%, black);
+    color: white;
+}
+
+/* Scrollbars */
+* {
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+    scrollbar-width: thin;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Typography (prose) dark tuning */
+.prose {
+    --tw-prose-body: var(--text-secondary);
+    --tw-prose-headings: var(--text-primary);
+    --tw-prose-bold: var(--text-primary);
+    --tw-prose-links: var(--color-brand-400);
+    --tw-prose-code: #E8E8F2;
+    --tw-prose-quotes: #C9CAD4;
+    --tw-prose-hr: var(--border-strong);
+    --tw-prose-th-borders: var(--border-strong);
+    --tw-prose-td-borders: var(--border-weak);
+}
+
+/* Keyframes */
+@keyframes float-y {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+    100% { transform: translateY(0px); }
+}
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+@keyframes gradient-x {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Utilities */
+@utility text-hero {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.5;
+    font-size: clamp(3rem, 5.5vw, 4.5rem); /* 48px → 72px */
+    background-image: linear-gradient(90deg, white 0%, #EDECF5 60%, color-mix(in oklab, var(--color-brand-400) 35%, white) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+@utility text-subtitle {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--text-secondary);
+    font-size: clamp(1.05rem, 1.2vw, 1.25rem);
+}
+@utility gradient-text {
+    background-image: linear-gradient(90deg, var(--color-brand-400), var(--color-brand-200));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+@utility bg-hero {
+    background:
+        radial-gradient(1200px 600px at 80% -10%, color-mix(in oklab, var(--color-brand-500) 20%, transparent) 0%, transparent 60%),
+        radial-gradient(900px 500px at -10% 20%, rgba(87, 31, 56, 0.35) 0%, transparent 60%),
+        linear-gradient(180deg, var(--gradient-hero-from) 0%, var(--gradient-hero-to) 100%);
+}
+@utility glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    backdrop-filter: blur(10px) saturate(130%);
+    border-radius: var(--radius-sm);
+}
+@utility glass-hover {
+    background: var(--glass-hover);
+}
+@utility card-base {
+    @apply glass p-5 md:p-6;
+    border-radius: var(--radius-sm);
+}
+@utility elevated {
+    box-shadow: var(--shadow-raised);
+}
+@utility border-brand-accent {
+    border-color: var(--border-brand);
+}
+@utility focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-brand-500) 45%, transparent), 0 0 0 6px rgba(117, 46, 79, 0.25);
+}
+@utility h-lvh-100 {
+    height: 100lvh;
+}
+@utility min-h-lvh-100 {
+    min-height: 100lvh;
+}
+@utility animate-float {
+    animation: float-y 6s ease-in-out infinite;
+}
+@utility animate-shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 1.75s linear infinite;
+}
+@utility animate-gradient-x {
+    background-size: 200% 200%;
+    animation: gradient-x 8s ease infinite;
+}
+@utility subtle-sep {
+    border-top: 1px solid var(--border-weak);
+}
+@utility text-primary {
+    color: var(--text-primary);
+}
+@utility text-secondary {
+    color: var(--text-secondary);
+}
+@utility text-muted {
+    color: var(--text-muted);
+}
+@utility btn-base {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-weak);
+    color: var(--text-primary);
+    transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    will-change: transform;
+}
+@utility badge-base {
+    @apply inline-flex items-center gap-1 px-2 py-1 text-xs font-medium;
+    border-radius: 999px;
+    border: 1px solid var(--border-weak);
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.035);
+}
+
+/* Backdrop blur utilities (xs through xl) */
+@utility backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+}
+@utility backdrop-blur-sm {
+    backdrop-filter: blur(4px);
+}
+@utility backdrop-blur-md {
+    backdrop-filter: blur(8px);
+}
+@utility backdrop-blur-lg {
+    backdrop-filter: blur(12px);
+}
+@utility backdrop-blur-xl {
+    backdrop-filter: blur(16px);
+}
+
+/* Shimmer surface utility */
+@utility shimmer-surface {
+    background-image: linear-gradient(
+        90deg,
+        rgba(255,255,255,0.02) 0%,
+        rgba(255,255,255,0.07) 20%,
+        rgba(255,255,255,0.02) 40%,
+        rgba(255,255,255,0.02) 100%
+    );
+}
+
+/* Components */
+@layer components {
+    /* Buttons */
+    .btn { @apply btn-base; background: rgba(255,255,255,0.03); }
+    .btn:hover { background: rgba(255,255,255,0.06); border-color: var(--border-strong); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    /* Primary CTA uses brand background (use sparingly) */
+    .btn-primary {
+        @apply btn-base;
+        background: var(--color-brand-500);
+        border-color: color-mix(in oklab, var(--color-brand-500) 55%, black);
+        color: white;
+    }
+    .btn-primary:hover {
+        background: color-mix(in oklab, var(--color-brand-500) 75%, white);
+        border-color: color-mix(in oklab, var(--color-brand-500) 70%, black);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 24px rgba(117, 46, 79, 0.35);
+    }
+    .btn-primary:active { transform: translateY(0); }
+
+    /* Ghost and subtle variants avoid heavy brand fills */
+    .btn-ghost {
+        @apply btn-base;
+        background: transparent;
+        border-color: var(--border-weak);
+        color: var(--text-secondary);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); border-color: var(--border-strong); }
+
+    /* Badges */
+    .badge { @apply badge-base; }
+    .badge-brand {
+        @apply badge-base;
+        border-color: var(--border-brand);
+        color: color-mix(in oklab, var(--color-brand-200) 85%, white);
+        background: color-mix(in oklab, var(--color-brand-700) 85%, transparent);
+    }
+
+    /* Cards */
+    .card { @apply card-base; }
+    .card:hover { @apply glass-hover; }
+
+    /* Inputs */
+    .input {
+        @apply w-full px-3 py-2 text-sm;
+        background: rgba(255,255,255,0.035);
+        border: 1px solid var(--border-weak);
+        color: var(--text-primary);
+        border-radius: var(--radius-xs);
+        transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+    }
+    .input::placeholder { color: var(--text-muted); }
+    .input:focus { @apply focus-ring; border-color: var(--border-brand); background: rgba(255,255,255,0.05); }
+
+    /* Surfaces */
+    .surface {
+        background: var(--color-surface-800);
+        border: 1px solid var(--border-weak);
+        border-radius: var(--radius-sm);
+    }
+    .surface-glass { @apply glass; }
+}
+
+/* Page-level helpers */
+.page--LandingPage .hero {
+    @apply min-h-lvh-100 bg-hero flex flex-col items-center justify-center text-center px-6;
+}
+.page--LandingPage .hero .headline { @apply text-hero; }
+.page--LandingPage .hero .subhead { @apply text-subtitle mt-4 max-w-3xl; }
+
+/* Video overlay for hero background */
+.hero-video::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(60% 50% at 50% 10%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+}
+
+/* Rings and outlines for accessibility */
+:focus-visible { @apply focus-ring; }
+
+/* Link styles */
+a.brand-link {
+    color: var(--color-brand-300);
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in oklab, var(--color-brand-300) 60%, transparent);
+    transition: color 120ms ease, text-decoration-color 120ms ease;
+}
+a.brand-link:hover {
+    color: var(--color-brand-200);
+    text-decoration-color: var(--color-brand-200);
+}
+
+/* Thin brand borders for highlights (non-CTA) */
+.thin-brand-border {
+    border: 1px solid var(--border-brand);
+    border-radius: var(--radius-xs);
+}
+
+/* A Thin border to use when toggling between a border and no border to prevent layout shift */
+.thin-invisible-border {
+    border: 1px solid transparent;
+    border-radius: var(--radius-xs);
+}
+
+/* Utility helpers for layouts */
+@utility stack-v { display: flex; flex-direction: column; gap: 0.75rem; }
+@utility stack-v-lg { display: flex; flex-direction: column; gap: 1.25rem; }
+@utility stack-v-xl { display: flex; flex-direction: column; gap: 1.75rem; }
+
+.ioFlex1{
+    flex:1;
+}
+.prose img{
+    aspect-ratio: 16/8;
+    object-fit: cover;
+    border-radius:8px;
+}
+
+.disable-scrolling{
+    overflow:hidden;
+    overflow:clip;
 }
